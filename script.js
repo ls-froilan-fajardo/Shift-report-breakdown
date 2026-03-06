@@ -46,6 +46,9 @@ function parseCSV(text) {
 /* FILE HANDLERS */
 function checkFilesAndRender() {
   const sSec = document.getElementById('salesSection'), pSec = document.getElementById('paymentsSection');
+  
+  console.log("Checking files... Sales rows:", allRows.length, "Payment rows:", paymentsRows.length);
+
   if (allRows.length > 0 && paymentsRows.length > 0) {
     sSec.style.display = 'block'; pSec.style.display = 'block';
     updateStaffFilter();
@@ -58,12 +61,20 @@ function checkFilesAndRender() {
 
 csvFileInput.addEventListener('change', e => { 
   const f = e.target.files[0]; if (!f) return; 
-  const r = new FileReader(); r.onload = ev => { allRows = parseCSV(ev.target.result); checkFilesAndRender(); }; r.readAsText(f); 
+  const r = new FileReader(); r.onload = ev => { 
+    allRows = parseCSV(ev.target.result); 
+    console.log("Sales CSV Loaded");
+    checkFilesAndRender(); 
+  }; r.readAsText(f); 
 });
 
 paymentsCsvInput.addEventListener('change', e => { 
   const f = e.target.files[0]; if (!f) return; 
-  const r = new FileReader(); r.onload = ev => { paymentsRows = parseCSV(ev.target.result); checkFilesAndRender(); }; r.readAsText(f); 
+  const r = new FileReader(); r.onload = ev => { 
+    paymentsRows = parseCSV(ev.target.result); 
+    console.log("Payments CSV Loaded");
+    checkFilesAndRender(); 
+  }; r.readAsText(f); 
 });
 
 /* STAFF FILTER SETUP */
@@ -101,11 +112,24 @@ function renderCombinedTable(rows, extraPay) {
   const selectedStaff = staffFilter.value;
   const visibleAccounts = new Set();
 
+  // 1. Scan Line Transactions
   rows.slice(1).forEach(r => {
     let acc = (r[accIdx] || "").trim();
     if (r[typeIdx]?.toUpperCase() === 'VOID') acc = acc || "Unassigned Account";
     if (acc && (!selectedStaff || r[staffIdx] === selectedStaff)) visibleAccounts.add(acc);
   });
+
+  // 2. Scan Payments for specific staff accounts
+  if (extraPay && extraPay.length > 1) {
+    const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff"), pTypeIdx = extraPay[0].indexOf("Type");
+    const excludedTypes = ["TRANSITORY_COMP", "TRANSITORY_OPEN", "TRANSITORY_CLOSE"];
+    extraPay.slice(1).forEach(pr => {
+      const pAcc = (pr[pAccIdx] || "").trim();
+      if (pAcc && !excludedTypes.includes((pr[pTypeIdx] || "").trim())) {
+        if (!selectedStaff || pr[pStaffIdx] === selectedStaff) visibleAccounts.add(pAcc);
+      }
+    });
+  }
 
   const unfiltered = new Map(), ownSales = new Map(), othersSales = new Map(), voids = new Map();
   visibleAccounts.forEach(acc => {
@@ -124,6 +148,7 @@ function renderCombinedTable(rows, extraPay) {
     }
     columnsToDisplay.slice(1).forEach(col => {
       const cIdx = rows[0].indexOf(csvColNames[col]);
+      if (cIdx === -1) return;
       const val = parseFloat(r[cIdx]) || 0;
       unfiltered.get(acc)[col] += val;
       if (selectedStaff && r[staffIdx] === selectedStaff) ownSales.get(acc)[col] += val;
@@ -220,8 +245,6 @@ function renderPaymentsTable(rows, masterAccs) {
 
   const accCol = rows[0].indexOf("Account"), amtCol = rows[0].indexOf("Amount"), tipCol = rows[0].indexOf("Tip"), paidCol = rows[0].indexOf("Paid"), staffCol = rows[0].indexOf("Staff"), typeCol = rows[0].indexOf("Type");
   const selected = staffFilter.value, ownMap = new Map(), othersMap = new Map();
-
-  // EXCLUSION LIST FOR TYPE COLUMN
   const excludedTypes = ["TRANSITORY_COMP", "TRANSITORY_OPEN", "TRANSITORY_CLOSE"];
 
   Array.from(masterAccs).sort().forEach(acc => { 
@@ -229,11 +252,10 @@ function renderPaymentsTable(rows, masterAccs) {
   });
 
   rows.slice(1).forEach(r => {
-    const acc = (r[accCol] || "").trim();
     const typeVal = (r[typeCol] || "").trim();
-
-    // Skip based on Type column criteria
     if (excludedTypes.includes(typeVal)) return;
+
+    const acc = (r[accCol] || "").trim();
     if (!acc || !ownMap.has(acc)) return;
 
     const amt = parseFloat(r[amtCol]) || 0, tip = tipCol !== -1 ? parseFloat(r[tipCol]) || 0 : 0, paid = paidCol !== -1 ? parseFloat(r[paidCol]) || 0 : 0;
@@ -260,7 +282,8 @@ function renderPaymentsTable(rows, masterAccs) {
   let totals = { oA: 0, oT: 0, oP: 0, tA: 0, tT: 0, tP: 0 };
   Array.from(ownMap.keys()).forEach(acc => {
     const o = ownMap.get(acc), t = othersMap.get(acc);
-    totals.oA += o.a; totals.oT += o.t; totals.oP += o.p; totals.tA += t.a; totals.tT += t.t; totals.tP += t.p;
+    totals.oA += o.a; totals.oT += o.t; totals.oP += o.p;
+    totals.tA += t.a; totals.tT += t.t; totals.tP += t.p;
   });
   [totals.oA, totals.oT, totals.oP, totals.tA, totals.tT, totals.tP].forEach((v, i) => {
     const td = document.createElement('td'); td.textContent = formatNumber(v); if (i === 2) td.classList.add('group-divider'); tTr.appendChild(td);
