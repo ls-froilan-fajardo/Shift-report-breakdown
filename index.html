@@ -15,7 +15,7 @@
     </div>
     
     <div class="control-group">
-      <label for="csvFileInput">Sales:</label>
+      <label for="csvFileInput">Line Transactions:</label>
       <input type="file" id="csvFileInput" accept=".csv" />
     </div>
 
@@ -41,23 +41,23 @@
       <h2>How to Use the Shift Report</h2>
       <hr>
       <ol>
-        <li><strong>Upload Sales:</strong> Select your "Line Transaction" CSV file. This contains all itemized sales and voids.</li>
-        <li><strong>Upload Payments:</strong> Select your "Payments" CSV file. This tracks actual money collected.</li>
-        <li><strong>Filter by Staff:</strong> Once both files are uploaded, use the Staff dropdown to isolate one person's performance.</li>
+        <li><strong>Upload Line Transactions:</strong> Select your "Line Transaction" CSV file. This contains all itemized sales, discounts, and voids.</li>
+        <li><strong>Upload Payments:</strong> Select your "Payments" CSV file. Note: Transitory types (OPEN, CLOSE, COMP) are automatically excluded.</li>
+        <li><strong>Filter by Staff:</strong> Once both files are uploaded, use the Staff dropdown to isolate a specific person's performance.</li>
         <li><strong>Analyze Data:</strong>
           <ul>
-            <li><strong>Sales Table:</strong> View "Own Sales" vs "Made by Others" for every account.</li>
-            <li><strong>Payments Table:</strong> See exact payments collected by that staff member.</li>
+            <li><strong>Sales Table:</strong> View "Own Sales" vs "Made by Others". Numerical cells have a solid background for better readability.</li>
+            <li><strong>Payments Table:</strong> See exact payments collected by that staff member, filtered to match the accounts from the sales data.</li>
           </ul>
         </li>
-        <li><strong>Shaded Totals:</strong> The dark-shaded rows represent the calculated Grand Totals for each section.</li>
+        <li><strong>Calculation Logic:</strong> The top green total calculates your net performance: <strong>Final Price + Voids - Comps - Discounts</strong>.</li>
       </ol>
     </div>
   </div>
 
   <div id="salesSection" class="table-section" style="display: none;">
     <h2 class="main-table-title">Sales</h2>
-    <h2>Total Sales after Voids and Comp<span id="ownPlusVoidsTotal" class="table-total"></span></h2>
+    <h2>Total Sales after Voids, Discount, and Comp<span id="ownPlusVoidsTotal" class="table-total"></span></h2>
     <div class="table-container">
       <table id="csvTableCombined"></table>
     </div>
