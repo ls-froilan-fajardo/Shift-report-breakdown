@@ -31,6 +31,13 @@
       </select>
     </div>
 
+    <div class="control-group">
+      <label for="methodFilter">Method:</label>
+      <select id="methodFilter" disabled>
+        <option value="">All Methods</option>
+      </select>
+    </div>
+
     <button id="clearCsv">Clear Data</button>
     <button id="toggleTheme">Theme</button>
   </div>
@@ -43,14 +50,19 @@
       <ol>
         <li><strong>Upload Line Transactions:</strong> Select your "Line Transaction" CSV file. This contains all itemized sales, discounts, and voids.</li>
         <li><strong>Upload Payments:</strong> Select your "Payments" CSV file.</li>
-        <li><strong>Filter by Staff:</strong> Once both files are uploaded, use the Staff dropdown to isolate a specific person's performance.</li>
-        <li><strong>Analyze Data:</strong>
+        <li><strong>Filter Data:</strong> 
           <ul>
-            <li><strong>Sales Table:</strong> View "Own Sales" vs "Made by Others". Numerical cells have a solid background for better readability.</li>
-            <li><strong>Payments Table:</strong> See exact payments collected by that staff member, filtered to match the accounts from the sales data.</li>
+            <li><strong>By Staff:</strong> Isolate a specific person's performance.</li>
+            <li><strong>By Method:</strong> Isolate specific payment types (e.g., Cash, Visa) to cross-reference exactly what was sold vs. how it was paid.</li>
           </ul>
         </li>
-        <li><strong>Calculation Logic:</strong> The top green total calculates your net performance: <strong>Final Price + Voids - Comps - Discounts</strong>.</li>
+        <li><strong>Analyze Data:</strong>
+          <ul>
+            <li><strong>Sales Table:</strong> View "Own Sales" vs "Made by Others".</li>
+            <li><strong>Payments Table:</strong> See exact payments collected. <em>Note: Transitory accounts (OPEN, CLOSE, COMP) are excluded from the "Own Payments" calculation.</em></li>
+          </ul>
+        </li>
+        <li><strong>Calculation Logic:</strong> The top green total calculates your net performance: <strong>Final Price + Voids - Comps - Discounts</strong> (Charge is excluded from this total).</li>
       </ol>
     </div>
   </div>
