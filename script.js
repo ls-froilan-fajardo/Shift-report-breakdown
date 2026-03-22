@@ -18,7 +18,8 @@ const csvColNames = { "Final Price": "FinalPrice", "Discount": "Discount", "Loss
 
 const csvFileInput = document.getElementById('csvFileInput'), 
       paymentsCsvInput = document.getElementById('paymentsCsvInput'), 
-      staffFilter = document.getElementById('staffFilter');
+      staffFilter = document.getElementById('staffFilter'),
+      methodFilter = document.getElementById('methodFilter');
       
 const totalSpans = { 
   ownPlusVoids: document.getElementById('ownPlusVoidsTotal'),
@@ -53,7 +54,7 @@ function checkFilesAndRender() {
 
   if (allRows.length > 0 && paymentsRows.length > 0) {
     sSec.style.display = 'block'; pSec.style.display = 'block';
-    updateStaffFilter();
+    updateFilters();
     const context = renderCombinedTable(allRows, paymentsRows);
     renderPaymentsTable(paymentsRows, context.visibleAccounts);
   } else {
@@ -71,9 +72,11 @@ paymentsCsvInput.addEventListener('change', e => {
   const r = new FileReader(); r.onload = ev => { paymentsRows = parseCSV(ev.target.result); checkFilesAndRender(); }; r.readAsText(f); 
 });
 
-/* STAFF FILTER SETUP */
-function updateStaffFilter() {
-  const staffSet = new Set();
+/* FILTER SETUP (STAFF & METHOD) */
+function updateFilters() {
+  const staffSet = new Set(), methodSet = new Set();
+  
+  // Get Staff
   const getStaff = (rows) => {
     if (rows.length > 0) {
       const idx = rows[0].indexOf("Staff");
@@ -81,19 +84,48 @@ function updateStaffFilter() {
     }
   };
   getStaff(allRows); getStaff(paymentsRows);
-  const current = staffFilter.value;
+
+  // Get Methods (Cleaned of parentheses)
+  if (paymentsRows.length > 0) {
+      const methodIdx = paymentsRows[0].indexOf("Method");
+      if (methodIdx !== -1) {
+          paymentsRows.slice(1).forEach(r => { 
+              if (r[methodIdx]) {
+                  // NEW: Remove "(123...)" and trim spaces
+                  const cleanMethod = r[methodIdx].replace(/\s*\([^)]*\)/g, '').trim();
+                  if (cleanMethod) methodSet.add(cleanMethod);
+              } 
+          });
+      }
+  }
+
+  const currentStaff = staffFilter.value;
   staffFilter.innerHTML = '<option value="">All Staff</option>';
   Array.from(staffSet).sort().forEach(s => {
     const opt = document.createElement('option');
     opt.value = s; opt.textContent = s.replace(/\s*\([^)]*\)/g, '');
-    if (s === current) opt.selected = true;
+    if (s === currentStaff) opt.selected = true;
     staffFilter.appendChild(opt);
   });
   staffFilter.disabled = staffSet.size === 0;
-  staffFilter.onchange = () => {
+
+  const currentMethod = methodFilter.value;
+  methodFilter.innerHTML = '<option value="">All Methods</option>';
+  Array.from(methodSet).sort().forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (m === currentMethod) opt.selected = true;
+      methodFilter.appendChild(opt);
+  });
+  methodFilter.disabled = methodSet.size === 0;
+
+  const renderData = () => {
     const context = renderCombinedTable(allRows, paymentsRows);
     renderPaymentsTable(paymentsRows, context.visibleAccounts);
   };
+
+  staffFilter.onchange = renderData;
+  methodFilter.onchange = renderData;
 }
 
 /* RENDER SALES TABLE */
@@ -104,21 +136,46 @@ function renderCombinedTable(rows, extraPay) {
   const accIdx = rows[0].indexOf("Account"), staffIdx = rows[0].indexOf("Staff"), typeIdx = rows[0].indexOf("Type");
   const fpIdx = rows[0].indexOf("FinalPrice"), chargeIdx = rows[0].indexOf("Charge");
   const selectedStaff = staffFilter.value;
+  const selectedMethod = methodFilter.value;
   const visibleAccounts = new Set();
+  const validAccountsByMethod = new Set();
+
+  // CROSS-REFERENCE: Find all accounts that used the selected method
+  if (selectedMethod && extraPay && extraPay.length > 1) {
+      const pAccIdx = extraPay[0].indexOf("Account");
+      const pMethodIdx = extraPay[0].indexOf("Method");
+      extraPay.slice(1).forEach(pr => {
+          // Clean the method string before comparison
+          const cleanMethod = (pr[pMethodIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
+          if (cleanMethod === selectedMethod) {
+              validAccountsByMethod.add((pr[pAccIdx] || "").trim());
+          }
+      });
+  }
 
   // 1. Scan Line Transactions
   rows.slice(1).forEach(r => {
     let acc = (r[accIdx] || "").trim();
     if (r[typeIdx]?.toUpperCase() === 'VOID') acc = acc || "Unassigned Account";
-    if (acc && (!selectedStaff || r[staffIdx] === selectedStaff)) visibleAccounts.add(acc);
+    
+    let accountValidByMethod = !selectedMethod || validAccountsByMethod.has(acc);
+
+    if (acc && (!selectedStaff || r[staffIdx] === selectedStaff) && accountValidByMethod) {
+        visibleAccounts.add(acc);
+    }
   });
 
-  // 2. Scan Payments for staff accounts
+  // 2. Scan Payments for staff/method accounts
   if (extraPay && extraPay.length > 1) {
-    const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff");
+    const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff"), pTypeIdx = extraPay[0].indexOf("Type"), pMethodIdx = extraPay[0].indexOf("Method");
     extraPay.slice(1).forEach(pr => {
       const pAcc = (pr[pAccIdx] || "").trim();
-      if (pAcc) {
+      // Clean method string
+      const pMethod = (pr[pMethodIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
+      
+      let accountValidByMethod = !selectedMethod || pMethod === selectedMethod;
+
+      if (pAcc && accountValidByMethod) {
         if (!selectedStaff || pr[pStaffIdx] === selectedStaff) visibleAccounts.add(pAcc);
       }
     });
@@ -139,7 +196,6 @@ function renderCombinedTable(rows, extraPay) {
 
     if (isVoid) {
       if (!selectedStaff || r[staffIdx] === selectedStaff) {
-        // Deduct charge from void Final Price
         const voidVal = (parseFloat(r[fpIdx]) || 0) - rowCharge;
         voids.set(acc, voids.get(acc) + voidVal);
       }
@@ -151,7 +207,6 @@ function renderCombinedTable(rows, extraPay) {
       if (cIdx === -1) return;
       let val = parseFloat(r[cIdx]) || 0;
 
-      // DEDUCT CHARGE FROM FINAL PRICE
       if (col === "Final Price") val -= rowCharge;
 
       unfiltered.get(acc)[col] += val;
@@ -193,7 +248,6 @@ function renderCombinedTable(rows, extraPay) {
             gSum += voids.get(acc);
         } else {
             g.cols.forEach(c => {
-                // EXCLUDE CHARGE FROM "Sales of the day" AND "Made by others" HEADERS
                 if (g.name === 'Sales of the day') {
                     if (c !== "Charge") gSum += unfiltered.get(acc)[c];
                 } else if (g.name === 'Own Sales') {
@@ -254,10 +308,11 @@ function renderPaymentsTable(rows, masterAccs) {
   const table = document.getElementById('csvTablePayments'); table.innerHTML = '';
   if (!rows.length || !masterAccs.size) return;
 
-  const accCol = rows[0].indexOf("Account"), amtCol = rows[0].indexOf("Amount"), tipCol = rows[0].indexOf("Tip"), paidCol = rows[0].indexOf("Paid"), staffCol = rows[0].indexOf("Staff"), typeCol = rows[0].indexOf("Type");
-  const selected = staffFilter.value, ownMap = new Map(), othersMap = new Map();
+  const accCol = rows[0].indexOf("Account"), amtCol = rows[0].indexOf("Amount"), tipCol = rows[0].indexOf("Tip"), paidCol = rows[0].indexOf("Paid"), staffCol = rows[0].indexOf("Staff"), typeCol = rows[0].indexOf("Type"), methodCol = rows[0].indexOf("Method");
   
-  // EXCLUSION LIST FOR OWN PAYMENTS ONLY
+  const selectedStaff = staffFilter.value;
+  const selectedMethod = methodFilter.value; 
+  const ownMap = new Map(), othersMap = new Map();
   const excludedTypes = ["TRANSITORY_COMP", "TRANSITORY_OPEN", "TRANSITORY_CLOSE"];
 
   Array.from(masterAccs).sort().forEach(acc => { 
@@ -268,20 +323,22 @@ function renderPaymentsTable(rows, masterAccs) {
     const acc = (r[accCol] || "").trim();
     if (!acc || !ownMap.has(acc)) return;
 
+    // Filter by Method (cleaned string)
+    const pMethod = (r[methodCol] || "").replace(/\s*\([^)]*\)/g, '').trim();
+    if (selectedMethod && pMethod !== selectedMethod) return;
+
     const typeVal = (r[typeCol] || "").trim();
     const isTransitory = excludedTypes.includes(typeVal);
 
     const amt = parseFloat(r[amtCol]) || 0, tip = tipCol !== -1 ? parseFloat(r[tipCol]) || 0 : 0, paid = paidCol !== -1 ? parseFloat(r[paidCol]) || 0 : 0;
-    const isOwn = !selected || (staffCol !== -1 && r[staffCol] === selected);
+    const isOwn = !selectedStaff || (staffCol !== -1 && r[staffCol] === selectedStaff);
 
     if (isOwn) {
-      // If it belongs to the Own Payments group, skip the Transitory types
       if (!isTransitory) {
         const data = ownMap.get(acc);
         data.a += amt; data.t += tip; data.p += paid;
       }
     } else {
-      // If it belongs to Payments by others, include everything (even Transitory types)
       const data = othersMap.get(acc);
       data.a += amt; data.t += tip; data.p += paid;
     }
@@ -309,7 +366,6 @@ function renderPaymentsTable(rows, masterAccs) {
     totals.tA += t.a; totals.tT += t.t; totals.tP += t.p;
   });
 
-  // Calculate "Payments of the day" total header
   if (totalSpans.paymentsOfTheDay) {
     totalSpans.paymentsOfTheDay.textContent = formatNumber(totals.oA + totals.tA);
   }
@@ -320,8 +376,11 @@ function renderPaymentsTable(rows, masterAccs) {
   tbody.appendChild(tTr);
 
   Array.from(ownMap.keys()).sort().forEach(acc => {
-    const tr = document.createElement('tr'), tdAc = document.createElement('td'); tdAc.textContent = acc; tr.appendChild(tdAc);
     const o = ownMap.get(acc), t = othersMap.get(acc);
+    if (o.a === 0 && o.t === 0 && o.p === 0 && t.a === 0 && t.t === 0 && t.p === 0) return;
+
+    const tr = document.createElement('tr'), tdAc = document.createElement('td'); tdAc.textContent = acc; tr.appendChild(tdAc);
+    
     [o.a, o.t, o.p, t.a, t.t, t.p].forEach((v, i) => {
       const td = document.createElement('td'); td.textContent = formatNumber(v); if (i === 2) td.classList.add('group-divider'); tr.appendChild(td);
     });
@@ -335,6 +394,7 @@ document.getElementById('clearCsv').onclick = () => {
   if (confirm("Are you sure you want to clear all data?")) {
     allRows = []; paymentsRows = []; csvFileInput.value = ''; paymentsCsvInput.value = '';
     staffFilter.innerHTML = '<option value="">All Staff</option>'; staffFilter.disabled = true;
+    methodFilter.innerHTML = '<option value="">All Methods</option>'; methodFilter.disabled = true;
     checkFilesAndRender();
   }
 };
