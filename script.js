@@ -50,7 +50,6 @@ function parseCSV(text) {
 /* FILE HANDLERS */
 function checkFilesAndRender() {
   const sSec = document.getElementById('salesSection'), pSec = document.getElementById('paymentsSection');
-  console.log("Processing files...");
 
   if (allRows.length > 0 && paymentsRows.length > 0) {
     sSec.style.display = 'block'; pSec.style.display = 'block';
@@ -76,7 +75,6 @@ paymentsCsvInput.addEventListener('change', e => {
 function updateFilters() {
   const staffSet = new Set(), methodSet = new Set();
   
-  // Get Staff
   const getStaff = (rows) => {
     if (rows.length > 0) {
       const idx = rows[0].indexOf("Staff");
@@ -85,13 +83,12 @@ function updateFilters() {
   };
   getStaff(allRows); getStaff(paymentsRows);
 
-  // Get Methods (Cleaned of parentheses)
   if (paymentsRows.length > 0) {
       const methodIdx = paymentsRows[0].indexOf("Method");
       if (methodIdx !== -1) {
           paymentsRows.slice(1).forEach(r => { 
               if (r[methodIdx]) {
-                  // NEW: Remove "(123...)" and trim spaces
+                  // Remove text inside parenthesis
                   const cleanMethod = r[methodIdx].replace(/\s*\([^)]*\)/g, '').trim();
                   if (cleanMethod) methodSet.add(cleanMethod);
               } 
@@ -140,12 +137,10 @@ function renderCombinedTable(rows, extraPay) {
   const visibleAccounts = new Set();
   const validAccountsByMethod = new Set();
 
-  // CROSS-REFERENCE: Find all accounts that used the selected method
   if (selectedMethod && extraPay && extraPay.length > 1) {
       const pAccIdx = extraPay[0].indexOf("Account");
       const pMethodIdx = extraPay[0].indexOf("Method");
       extraPay.slice(1).forEach(pr => {
-          // Clean the method string before comparison
           const cleanMethod = (pr[pMethodIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
           if (cleanMethod === selectedMethod) {
               validAccountsByMethod.add((pr[pAccIdx] || "").trim());
@@ -153,28 +148,21 @@ function renderCombinedTable(rows, extraPay) {
       });
   }
 
-  // 1. Scan Line Transactions
   rows.slice(1).forEach(r => {
     let acc = (r[accIdx] || "").trim();
     if (r[typeIdx]?.toUpperCase() === 'VOID') acc = acc || "Unassigned Account";
-    
     let accountValidByMethod = !selectedMethod || validAccountsByMethod.has(acc);
-
     if (acc && (!selectedStaff || r[staffIdx] === selectedStaff) && accountValidByMethod) {
         visibleAccounts.add(acc);
     }
   });
 
-  // 2. Scan Payments for staff/method accounts
   if (extraPay && extraPay.length > 1) {
-    const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff"), pTypeIdx = extraPay[0].indexOf("Type"), pMethodIdx = extraPay[0].indexOf("Method");
+    const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff"), pMethodIdx = extraPay[0].indexOf("Method");
     extraPay.slice(1).forEach(pr => {
       const pAcc = (pr[pAccIdx] || "").trim();
-      // Clean method string
       const pMethod = (pr[pMethodIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
-      
       let accountValidByMethod = !selectedMethod || pMethod === selectedMethod;
-
       if (pAcc && accountValidByMethod) {
         if (!selectedStaff || pr[pStaffIdx] === selectedStaff) visibleAccounts.add(pAcc);
       }
@@ -215,20 +203,23 @@ function renderCombinedTable(rows, extraPay) {
     });
   });
 
-  let dayT = 0, ownT = 0, otherT = 0, vT = 0, ownCompT = 0, ownDiscT = 0;
+  // Calculate Header Total: Final Price + Voids - Comp - Discount
+  let calcFp = 0, calcComp = 0, calcDisc = 0, calcVoids = 0;
   visibleAccounts.forEach(acc => {
-    columnsToDisplay.slice(1).forEach(c => { 
-        dayT += unfiltered.get(acc)[c]; 
-        ownT += ownSales.get(acc)[c]; 
-        otherT += othersSales.get(acc)[c]; 
-    });
-    vT += voids.get(acc); 
-    ownCompT += ownSales.get(acc)["Comp"];
-    ownDiscT += ownSales.get(acc)["Discount"];
+      calcVoids += voids.get(acc);
+      if (selectedStaff) {
+          calcFp += ownSales.get(acc)["Final Price"];
+          calcComp += ownSales.get(acc)["Comp"];
+          calcDisc += ownSales.get(acc)["Discount"];
+      } else {
+          calcFp += unfiltered.get(acc)["Final Price"];
+          calcComp += unfiltered.get(acc)["Comp"];
+          calcDisc += unfiltered.get(acc)["Discount"];
+      }
   });
 
   if (totalSpans.ownPlusVoids) {
-    totalSpans.ownPlusVoids.textContent = selectedStaff ? formatNumber(ownT + vT - (ownCompT + ownDiscT)) : "";
+      totalSpans.ownPlusVoids.textContent = formatNumber(calcFp + calcVoids - calcComp - calcDisc);
   }
 
   const grps = [
@@ -323,7 +314,6 @@ function renderPaymentsTable(rows, masterAccs) {
     const acc = (r[accCol] || "").trim();
     if (!acc || !ownMap.has(acc)) return;
 
-    // Filter by Method (cleaned string)
     const pMethod = (r[methodCol] || "").replace(/\s*\([^)]*\)/g, '').trim();
     if (selectedMethod && pMethod !== selectedMethod) return;
 
