@@ -22,7 +22,6 @@ const csvFileInput = document.getElementById('csvFileInput'),
       methodFilter = document.getElementById('methodFilter');
       
 const totalSpans = { 
-  ownPlusVoids: document.getElementById('ownPlusVoidsTotal'),
   paymentsOfTheDay: document.getElementById('paymentsOfTheDayTotal')
 };
 
@@ -88,7 +87,6 @@ function updateFilters() {
       if (methodIdx !== -1) {
           paymentsRows.slice(1).forEach(r => { 
               if (r[methodIdx]) {
-                  // Remove text inside parenthesis
                   const cleanMethod = r[methodIdx].replace(/\s*\([^)]*\)/g, '').trim();
                   if (cleanMethod) methodSet.add(cleanMethod);
               } 
@@ -202,25 +200,6 @@ function renderCombinedTable(rows, extraPay) {
       else if (selectedStaff) othersSales.get(acc)[col] += val;
     });
   });
-
-  // Calculate Header Total: Final Price + Voids - Comp - Discount
-  let calcFp = 0, calcComp = 0, calcDisc = 0, calcVoids = 0;
-  visibleAccounts.forEach(acc => {
-      calcVoids += voids.get(acc);
-      if (selectedStaff) {
-          calcFp += ownSales.get(acc)["Final Price"];
-          calcComp += ownSales.get(acc)["Comp"];
-          calcDisc += ownSales.get(acc)["Discount"];
-      } else {
-          calcFp += unfiltered.get(acc)["Final Price"];
-          calcComp += unfiltered.get(acc)["Comp"];
-          calcDisc += unfiltered.get(acc)["Discount"];
-      }
-  });
-
-  if (totalSpans.ownPlusVoids) {
-      totalSpans.ownPlusVoids.textContent = formatNumber(calcFp + calcVoids - calcComp - calcDisc);
-  }
 
   const grps = [
     { name: 'Sales of the day', cols: columnsToDisplay.slice(1) },
