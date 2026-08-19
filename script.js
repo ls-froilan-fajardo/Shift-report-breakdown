@@ -19,6 +19,7 @@ const csvColNames = { "Final Price": "FinalPrice", "Discount": "Discount", "Loss
 const csvFileInput = document.getElementById('csvFileInput'), 
       paymentsCsvInput = document.getElementById('paymentsCsvInput'), 
       staffFilter = document.getElementById('staffFilter'),
+      groupFilter = document.getElementById('groupFilter'),
       methodFilter = document.getElementById('methodFilter');
       
 const totalSpans = { 
@@ -70,30 +71,39 @@ paymentsCsvInput.addEventListener('change', e => {
   const r = new FileReader(); r.onload = ev => { paymentsRows = parseCSV(ev.target.result); checkFilesAndRender(); }; r.readAsText(f); 
 });
 
-/* FILTER SETUP (STAFF & METHOD) */
+/* FILTER SETUP (STAFF, GROUP & METHOD) */
 function updateFilters() {
-  const staffSet = new Set(), methodSet = new Set();
+  const staffSet = new Set(), methodSet = new Set(), groupSet = new Set();
   
-  const getStaff = (rows) => {
-    if (rows.length > 0) {
-      const idx = rows[0].indexOf("Staff");
-      if (idx !== -1) rows.slice(1).forEach(r => { if (r[idx]) staffSet.add(r[idx]); });
-    }
-  };
-  getStaff(allRows); getStaff(paymentsRows);
-
+  // Get Staff & Group
+  if (allRows.length > 0) {
+    const staffIdx = allRows[0].indexOf("Staff");
+    const groupIdx = allRows[0].indexOf("Group");
+    
+    allRows.slice(1).forEach(r => { 
+        if (staffIdx !== -1 && r[staffIdx]) staffSet.add(r[staffIdx]); 
+        if (groupIdx !== -1 && r[groupIdx]) {
+            // NEW: Clean parenthesis out of the Group string
+            const cleanGroup = r[groupIdx].replace(/\s*\([^)]*\)/g, '').trim();
+            if (cleanGroup) groupSet.add(cleanGroup);
+        }
+    });
+  }
+  
   if (paymentsRows.length > 0) {
+      const staffIdx = paymentsRows[0].indexOf("Staff");
       const methodIdx = paymentsRows[0].indexOf("Method");
-      if (methodIdx !== -1) {
-          paymentsRows.slice(1).forEach(r => { 
-              if (r[methodIdx]) {
-                  const cleanMethod = r[methodIdx].replace(/\s*\([^)]*\)/g, '').trim();
-                  if (cleanMethod) methodSet.add(cleanMethod);
-              } 
-          });
-      }
+      
+      paymentsRows.slice(1).forEach(r => {
+          if (staffIdx !== -1 && r[staffIdx]) staffSet.add(r[staffIdx]);
+          if (methodIdx !== -1 && r[methodIdx]) {
+              const cleanMethod = r[methodIdx].replace(/\s*\([^)]*\)/g, '').trim();
+              if (cleanMethod) methodSet.add(cleanMethod);
+          }
+      });
   }
 
+  // Populate Staff
   const currentStaff = staffFilter.value;
   staffFilter.innerHTML = '<option value="">All Staff</option>';
   Array.from(staffSet).sort().forEach(s => {
@@ -104,6 +114,18 @@ function updateFilters() {
   });
   staffFilter.disabled = staffSet.size === 0;
 
+  // Populate Group
+  const currentGroup = groupFilter.value;
+  groupFilter.innerHTML = '<option value="">All Groups</option>';
+  Array.from(groupSet).sort().forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g; opt.textContent = g;
+    if (g === currentGroup) opt.selected = true;
+    groupFilter.appendChild(opt);
+  });
+  groupFilter.disabled = groupSet.size === 0;
+
+  // Populate Method
   const currentMethod = methodFilter.value;
   methodFilter.innerHTML = '<option value="">All Methods</option>';
   Array.from(methodSet).sort().forEach(m => {
@@ -120,6 +142,7 @@ function updateFilters() {
   };
 
   staffFilter.onchange = renderData;
+  groupFilter.onchange = renderData;
   methodFilter.onchange = renderData;
 }
 
@@ -129,12 +152,17 @@ function renderCombinedTable(rows, extraPay) {
   if (!rows.length) return { visibleAccounts: new Set() };
   
   const accIdx = rows[0].indexOf("Account"), staffIdx = rows[0].indexOf("Staff"), typeIdx = rows[0].indexOf("Type");
-  const fpIdx = rows[0].indexOf("FinalPrice"), chargeIdx = rows[0].indexOf("Charge");
+  const fpIdx = rows[0].indexOf("FinalPrice"), chargeIdx = rows[0].indexOf("Charge"), groupIdx = rows[0].indexOf("Group");
+  
   const selectedStaff = staffFilter.value;
+  const selectedGroup = groupFilter.value; 
   const selectedMethod = methodFilter.value;
+  
   const visibleAccounts = new Set();
   const validAccountsByMethod = new Set();
+  const validAccountsByGroup = new Set();
 
+  // Find all accounts that used the selected method
   if (selectedMethod && extraPay && extraPay.length > 1) {
       const pAccIdx = extraPay[0].indexOf("Account");
       const pMethodIdx = extraPay[0].indexOf("Method");
@@ -146,22 +174,46 @@ function renderCombinedTable(rows, extraPay) {
       });
   }
 
+  // Find all accounts that contain the selected group
+  if (selectedGroup && groupIdx !== -1) {
+      rows.slice(1).forEach(r => {
+          // NEW: Clean parenthesis out of the Group string for comparison
+          const cleanGroup = (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
+          if (cleanGroup === selectedGroup) {
+              let acc = (r[accIdx] || "").trim();
+              if (r[typeIdx]?.toUpperCase() === 'VOID') acc = acc || "Unassigned Account";
+              validAccountsByGroup.add(acc);
+          }
+      });
+  }
+
+  // 1. Scan Line Transactions
   rows.slice(1).forEach(r => {
     let acc = (r[accIdx] || "").trim();
     if (r[typeIdx]?.toUpperCase() === 'VOID') acc = acc || "Unassigned Account";
+    
     let accountValidByMethod = !selectedMethod || validAccountsByMethod.has(acc);
-    if (acc && (!selectedStaff || r[staffIdx] === selectedStaff) && accountValidByMethod) {
+    
+    // Check against cleaned group string
+    let cleanGroup = groupIdx !== -1 ? (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim() : "";
+    let rowValidByGroup = !selectedGroup || cleanGroup === selectedGroup;
+    
+    if (acc && (!selectedStaff || r[staffIdx] === selectedStaff) && accountValidByMethod && rowValidByGroup) {
         visibleAccounts.add(acc);
     }
   });
 
+  // 2. Scan Payments for staff/method/group accounts
   if (extraPay && extraPay.length > 1) {
     const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff"), pMethodIdx = extraPay[0].indexOf("Method");
     extraPay.slice(1).forEach(pr => {
       const pAcc = (pr[pAccIdx] || "").trim();
       const pMethod = (pr[pMethodIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
+      
       let accountValidByMethod = !selectedMethod || pMethod === selectedMethod;
-      if (pAcc && accountValidByMethod) {
+      let accountValidByGroup = !selectedGroup || validAccountsByGroup.has(pAcc);
+      
+      if (pAcc && accountValidByMethod && accountValidByGroup) {
         if (!selectedStaff || pr[pStaffIdx] === selectedStaff) visibleAccounts.add(pAcc);
       }
     });
@@ -178,6 +230,11 @@ function renderCombinedTable(rows, extraPay) {
     if (isVoid) acc = acc || "Unassigned Account";
     if (!acc || !visibleAccounts.has(acc)) return;
     
+    // SKIP THIS ITEM ENTIRELY IF IT DOES NOT MATCH THE SELECTED GROUP
+    let cleanGroup = groupIdx !== -1 ? (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim() : "";
+    let rowValidByGroup = !selectedGroup || cleanGroup === selectedGroup;
+    if (!rowValidByGroup) return;
+
     const rowCharge = parseFloat(r[chargeIdx]) || 0;
 
     if (isVoid) {
@@ -363,6 +420,7 @@ document.getElementById('clearCsv').onclick = () => {
   if (confirm("Are you sure you want to clear all data?")) {
     allRows = []; paymentsRows = []; csvFileInput.value = ''; paymentsCsvInput.value = '';
     staffFilter.innerHTML = '<option value="">All Staff</option>'; staffFilter.disabled = true;
+    groupFilter.innerHTML = '<option value="">All Groups</option>'; groupFilter.disabled = true;
     methodFilter.innerHTML = '<option value="">All Methods</option>'; methodFilter.disabled = true;
     checkFilesAndRender();
   }
