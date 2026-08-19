@@ -58,7 +58,7 @@
   <!-- INSTRUCTIONS MODAL -->
   <div id="helpModal" class="modal">
     <div class="modal-content">
-      <span class="close-btn">&times;</span>
+      <span class="close-btn" id="helpCloseBtn">&times;</span>
       <h2>How to Use the Shift Report</h2>
       <hr>
       <ol>
@@ -75,9 +75,22 @@
           <ul>
             <li><strong>Sales Table:</strong> View "Own Sales" vs "Made by Others".</li>
             <li><strong>Payments Table:</strong> See exact payments collected. <em>Note: Transitory accounts (OPEN, CLOSE, COMP) are excluded from the "Own Payments" calculation.</em></li>
+            <li><strong>View Details:</strong> Click on any Account ID in the tables to view the itemized breakdown from the Line Transactions CSV.</li>
           </ul>
         </li>
       </ol>
+    </div>
+  </div>
+
+  <!-- TRANSACTION DETAILS MODAL -->
+  <div id="detailsModal" class="modal">
+    <div class="modal-content" style="width: 90%; max-width: 1400px;">
+      <span class="close-btn" id="detailsCloseBtn">&times;</span>
+      <h2 id="detailsTitle" class="main-table-title">Transaction Details</h2>
+      <hr>
+      <div class="table-container" id="detailsTableContainer" style="max-height: 60vh;">
+        <!-- Detailed item table will be injected here -->
+      </div>
     </div>
   </div>
 
