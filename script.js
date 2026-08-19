@@ -75,7 +75,6 @@ paymentsCsvInput.addEventListener('change', e => {
 function updateFilters() {
   const staffSet = new Set(), methodSet = new Set(), groupSet = new Set();
   
-  // Get Staff & Group
   if (allRows.length > 0) {
     const staffIdx = allRows[0].indexOf("Staff");
     const groupIdx = allRows[0].indexOf("Group");
@@ -83,7 +82,6 @@ function updateFilters() {
     allRows.slice(1).forEach(r => { 
         if (staffIdx !== -1 && r[staffIdx]) staffSet.add(r[staffIdx]); 
         if (groupIdx !== -1 && r[groupIdx]) {
-            // NEW: Clean parenthesis out of the Group string
             const cleanGroup = r[groupIdx].replace(/\s*\([^)]*\)/g, '').trim();
             if (cleanGroup) groupSet.add(cleanGroup);
         }
@@ -103,7 +101,6 @@ function updateFilters() {
       });
   }
 
-  // Populate Staff
   const currentStaff = staffFilter.value;
   staffFilter.innerHTML = '<option value="">All Staff</option>';
   Array.from(staffSet).sort().forEach(s => {
@@ -114,7 +111,6 @@ function updateFilters() {
   });
   staffFilter.disabled = staffSet.size === 0;
 
-  // Populate Group
   const currentGroup = groupFilter.value;
   groupFilter.innerHTML = '<option value="">All Groups</option>';
   Array.from(groupSet).sort().forEach(g => {
@@ -125,7 +121,6 @@ function updateFilters() {
   });
   groupFilter.disabled = groupSet.size === 0;
 
-  // Populate Method
   const currentMethod = methodFilter.value;
   methodFilter.innerHTML = '<option value="">All Methods</option>';
   Array.from(methodSet).sort().forEach(m => {
@@ -162,7 +157,6 @@ function renderCombinedTable(rows, extraPay) {
   const validAccountsByMethod = new Set();
   const validAccountsByGroup = new Set();
 
-  // Find all accounts that used the selected method
   if (selectedMethod && extraPay && extraPay.length > 1) {
       const pAccIdx = extraPay[0].indexOf("Account");
       const pMethodIdx = extraPay[0].indexOf("Method");
@@ -174,10 +168,8 @@ function renderCombinedTable(rows, extraPay) {
       });
   }
 
-  // Find all accounts that contain the selected group
   if (selectedGroup && groupIdx !== -1) {
       rows.slice(1).forEach(r => {
-          // NEW: Clean parenthesis out of the Group string for comparison
           const cleanGroup = (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
           if (cleanGroup === selectedGroup) {
               let acc = (r[accIdx] || "").trim();
@@ -187,14 +179,11 @@ function renderCombinedTable(rows, extraPay) {
       });
   }
 
-  // 1. Scan Line Transactions
   rows.slice(1).forEach(r => {
     let acc = (r[accIdx] || "").trim();
     if (r[typeIdx]?.toUpperCase() === 'VOID') acc = acc || "Unassigned Account";
     
     let accountValidByMethod = !selectedMethod || validAccountsByMethod.has(acc);
-    
-    // Check against cleaned group string
     let cleanGroup = groupIdx !== -1 ? (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim() : "";
     let rowValidByGroup = !selectedGroup || cleanGroup === selectedGroup;
     
@@ -203,7 +192,6 @@ function renderCombinedTable(rows, extraPay) {
     }
   });
 
-  // 2. Scan Payments for staff/method/group accounts
   if (extraPay && extraPay.length > 1) {
     const pAccIdx = extraPay[0].indexOf("Account"), pStaffIdx = extraPay[0].indexOf("Staff"), pMethodIdx = extraPay[0].indexOf("Method");
     extraPay.slice(1).forEach(pr => {
@@ -230,19 +218,20 @@ function renderCombinedTable(rows, extraPay) {
     if (isVoid) acc = acc || "Unassigned Account";
     if (!acc || !visibleAccounts.has(acc)) return;
     
-    // SKIP THIS ITEM ENTIRELY IF IT DOES NOT MATCH THE SELECTED GROUP
     let cleanGroup = groupIdx !== -1 ? (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim() : "";
     let rowValidByGroup = !selectedGroup || cleanGroup === selectedGroup;
     if (!rowValidByGroup) return;
 
     const rowCharge = parseFloat(r[chargeIdx]) || 0;
 
+    // Track Voids for the isolated visual column
     if (isVoid) {
       if (!selectedStaff || r[staffIdx] === selectedStaff) {
         const voidVal = (parseFloat(r[fpIdx]) || 0) - rowCharge;
         voids.set(acc, voids.get(acc) + voidVal);
       }
-      return;
+      // Removed the "return;" statement here so the VOID row continues 
+      // into the normal column calculations below
     }
 
     columnsToDisplay.slice(1).forEach(col => {
