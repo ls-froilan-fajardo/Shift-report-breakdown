@@ -73,6 +73,11 @@ input[type="file"], select, button {
   cursor: pointer;
 }
 
+/* Prevent long filenames from stretching the top bar */
+input[type="file"] {
+  max-width: 175px; 
+}
+
 button#clearCsv { background-color: #e74c3c; border: none; }
 button#toggleTheme { background-color: #16a085; border: none; }
 
