@@ -10,7 +10,10 @@ const helpModal = document.getElementById("helpModal"),
 const detailsModal = document.getElementById("detailsModal"),
       detailsSpan = document.getElementById("detailsCloseBtn"),
       detailsContainer = document.getElementById("detailsTableContainer"),
-      detailsTitle = document.getElementById("detailsTitle");
+      detailsTitle = document.getElementById("detailsTitle"),
+      modalTypeFilter = document.getElementById("modalTypeFilter"); // NEW MODAL FILTER
+
+let currentModalAccount = ""; // TRACK ACTIVE ACCOUNT IN MODAL
 
 if(helpBtn) helpBtn.onclick = () => helpModal.style.display = "block";
 if(helpSpan) helpSpan.onclick = () => helpModal.style.display = "none";
@@ -151,10 +154,11 @@ function updateFilters() {
   methodFilter.onchange = renderData;
 }
 
-/* MODAL DETAILS POPUP TRIGGER */
-function openDetailsModal(accountName) {
+/* MODAL DETAILS POPUP TRIGGER WITH TYPE FILTER LOGIC */
+function openDetailsModal(accountName, keepFilter = false) {
   if (!allRows || allRows.length === 0) return;
   
+  currentModalAccount = accountName;
   detailsTitle.textContent = `Transaction Details: ${accountName}`;
   
   const headers = allRows[0];
@@ -166,21 +170,18 @@ function openDetailsModal(accountName) {
   const selectedStaff = staffFilter.value;
   const selectedGroup = groupFilter.value;
   
-  // Filter only the rows belonging to this account ID AND matching active Staff/Group filters
-  const matchingRows = allRows.slice(1).filter(r => {
+  // Base matching rows based on Account, Staff, and Group
+  const baseMatchingRows = allRows.slice(1).filter(r => {
     const isVoid = (r[typeIdx] || "").toUpperCase() === 'VOID';
     let rAcc = (r[accIdx] || "").trim();
-    if (isVoid) rAcc = rAcc || "Unassigned Account"; // Apply mapping rule for voids
+    if (isVoid) rAcc = rAcc || "Unassigned Account";
     
-    // Check Account
     if (rAcc !== accountName) return false;
     
-    // Check Staff filter
     if (selectedStaff && staffIdx !== -1) {
         if ((r[staffIdx] || "").trim() !== selectedStaff) return false;
     }
     
-    // Check Group filter
     if (selectedGroup && groupIdx !== -1) {
         const cleanGroup = (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
         if (cleanGroup !== selectedGroup) return false;
@@ -188,16 +189,41 @@ function openDetailsModal(accountName) {
 
     return true;
   });
+
+  // Populate dynamic Type filter options only when opening the modal fresh
+  if (!keepFilter) {
+      modalTypeFilter.value = "";
+      const availableTypes = new Set();
+      baseMatchingRows.forEach(r => {
+          if (typeIdx !== -1 && r[typeIdx]) availableTypes.add(r[typeIdx].trim());
+      });
+      
+      modalTypeFilter.innerHTML = '<option value="">All Types</option>';
+      Array.from(availableTypes).sort().forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          modalTypeFilter.appendChild(opt);
+      });
+  }
+
+  // Apply Modal Type Filter
+  const selectedModalType = modalTypeFilter.value;
+  const finalMatchingRows = baseMatchingRows.filter(r => {
+      if (selectedModalType && typeIdx !== -1) {
+          if ((r[typeIdx] || "").trim() !== selectedModalType) return false;
+      }
+      return true;
+  });
   
   // Build details table
   let tableHTML = '<table style="width: 100%;"><thead><tr>';
   headers.forEach(h => tableHTML += `<th>${h}</th>`);
   tableHTML += '</tr></thead><tbody>';
   
-  if (matchingRows.length === 0) {
+  if (finalMatchingRows.length === 0) {
     tableHTML += `<tr><td colspan="${headers.length}" style="text-align: center;">No itemized line transactions found matching these filters.</td></tr>`;
   } else {
-    matchingRows.forEach(r => {
+    finalMatchingRows.forEach(r => {
       tableHTML += '<tr>';
       headers.forEach((_, i) => tableHTML += `<td>${r[i] || ""}</td>`);
       tableHTML += '</tr>';
@@ -207,6 +233,13 @@ function openDetailsModal(accountName) {
   tableHTML += '</tbody></table>';
   detailsContainer.innerHTML = tableHTML;
   detailsModal.style.display = "block";
+}
+
+// Re-render the Modal details when changing the type filter dropdown
+if (modalTypeFilter) {
+  modalTypeFilter.addEventListener("change", () => {
+    if (currentModalAccount) openDetailsModal(currentModalAccount, true);
+  });
 }
 
 /* RENDER SALES TABLE */
