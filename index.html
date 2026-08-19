@@ -86,7 +86,18 @@
   <div id="detailsModal" class="modal">
     <div class="modal-content" style="width: 90%; max-width: 1400px;">
       <span class="close-btn" id="detailsCloseBtn">&times;</span>
-      <h2 id="detailsTitle" class="main-table-title">Transaction Details</h2>
+      
+      <!-- MODAL HEADER WITH TYPE FILTER -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-right: 20px;">
+        <h2 id="detailsTitle" class="main-table-title" style="margin: 0;">Transaction Details</h2>
+        <div class="control-group">
+          <label for="modalTypeFilter" style="font-size: 12px; font-weight: bold;">Type Filter:</label>
+          <select id="modalTypeFilter">
+            <option value="">All Types</option>
+          </select>
+        </div>
+      </div>
+
       <hr>
       <div class="table-container" id="detailsTableContainer" style="max-height: 60vh;">
         <!-- Detailed item table will be injected here -->
