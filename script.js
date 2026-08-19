@@ -2,14 +2,24 @@
 document.body.classList.remove('light-mode');
 document.getElementById('toggleTheme').onclick = () => document.body.classList.toggle('light-mode');
 
-// HELP MODAL LOGIC
-const modal = document.getElementById("helpModal"), 
-      btn = document.getElementById("helpIcon"), 
-      span = document.getElementsByClassName("close-btn")[0];
+// MODALS LOGIC (Help & Details)
+const helpModal = document.getElementById("helpModal"), 
+      helpBtn = document.getElementById("helpIcon"), 
+      helpSpan = document.getElementById("helpCloseBtn");
 
-if(btn) btn.onclick = () => modal.style.display = "block";
-if(span) span.onclick = () => modal.style.display = "none";
-window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; }
+const detailsModal = document.getElementById("detailsModal"),
+      detailsSpan = document.getElementById("detailsCloseBtn"),
+      detailsContainer = document.getElementById("detailsTableContainer"),
+      detailsTitle = document.getElementById("detailsTitle");
+
+if(helpBtn) helpBtn.onclick = () => helpModal.style.display = "block";
+if(helpSpan) helpSpan.onclick = () => helpModal.style.display = "none";
+if(detailsSpan) detailsSpan.onclick = () => detailsModal.style.display = "none";
+
+window.onclick = (e) => { 
+  if (e.target == helpModal) helpModal.style.display = "none"; 
+  if (e.target == detailsModal) detailsModal.style.display = "none"; 
+}
 
 // DATA STORAGE
 let allRows = [], paymentsRows = []; 
@@ -141,6 +151,64 @@ function updateFilters() {
   methodFilter.onchange = renderData;
 }
 
+/* MODAL DETAILS POPUP TRIGGER */
+function openDetailsModal(accountName) {
+  if (!allRows || allRows.length === 0) return;
+  
+  detailsTitle.textContent = `Transaction Details: ${accountName}`;
+  
+  const headers = allRows[0];
+  const accIdx = headers.indexOf("Account");
+  const typeIdx = headers.indexOf("Type");
+  const staffIdx = headers.indexOf("Staff");
+  const groupIdx = headers.indexOf("Group");
+  
+  const selectedStaff = staffFilter.value;
+  const selectedGroup = groupFilter.value;
+  
+  // Filter only the rows belonging to this account ID AND matching active Staff/Group filters
+  const matchingRows = allRows.slice(1).filter(r => {
+    const isVoid = (r[typeIdx] || "").toUpperCase() === 'VOID';
+    let rAcc = (r[accIdx] || "").trim();
+    if (isVoid) rAcc = rAcc || "Unassigned Account"; // Apply mapping rule for voids
+    
+    // Check Account
+    if (rAcc !== accountName) return false;
+    
+    // Check Staff filter
+    if (selectedStaff && staffIdx !== -1) {
+        if ((r[staffIdx] || "").trim() !== selectedStaff) return false;
+    }
+    
+    // Check Group filter
+    if (selectedGroup && groupIdx !== -1) {
+        const cleanGroup = (r[groupIdx] || "").replace(/\s*\([^)]*\)/g, '').trim();
+        if (cleanGroup !== selectedGroup) return false;
+    }
+
+    return true;
+  });
+  
+  // Build details table
+  let tableHTML = '<table style="width: 100%;"><thead><tr>';
+  headers.forEach(h => tableHTML += `<th>${h}</th>`);
+  tableHTML += '</tr></thead><tbody>';
+  
+  if (matchingRows.length === 0) {
+    tableHTML += `<tr><td colspan="${headers.length}" style="text-align: center;">No itemized line transactions found matching these filters.</td></tr>`;
+  } else {
+    matchingRows.forEach(r => {
+      tableHTML += '<tr>';
+      headers.forEach((_, i) => tableHTML += `<td>${r[i] || ""}</td>`);
+      tableHTML += '</tr>';
+    });
+  }
+  
+  tableHTML += '</tbody></table>';
+  detailsContainer.innerHTML = tableHTML;
+  detailsModal.style.display = "block";
+}
+
 /* RENDER SALES TABLE */
 function renderCombinedTable(rows, extraPay) {
   const table = document.getElementById('csvTableCombined'); table.innerHTML = '';
@@ -224,14 +292,11 @@ function renderCombinedTable(rows, extraPay) {
 
     const rowCharge = parseFloat(r[chargeIdx]) || 0;
 
-    // Track Voids for the isolated visual column
     if (isVoid) {
       if (!selectedStaff || r[staffIdx] === selectedStaff) {
         const voidVal = (parseFloat(r[fpIdx]) || 0) - rowCharge;
         voids.set(acc, voids.get(acc) + voidVal);
       }
-      // Removed the "return;" statement here so the VOID row continues 
-      // into the normal column calculations below
     }
 
     columnsToDisplay.slice(1).forEach(col => {
@@ -307,7 +372,14 @@ function renderCombinedTable(rows, extraPay) {
   tbody.appendChild(tTr);
 
   Array.from(visibleAccounts).sort().forEach(acc => {
-    const tr = document.createElement('tr'); const tdAc = document.createElement('td'); tdAc.textContent = acc; tr.appendChild(tdAc);
+    const tr = document.createElement('tr'); 
+    
+    const tdAc = document.createElement('td'); 
+    tdAc.textContent = acc; 
+    tdAc.classList.add('account-link');
+    tdAc.onclick = () => openDetailsModal(acc);
+    tr.appendChild(tdAc);
+    
     const renderBlk = (vals, gi, ca) => ca.forEach((c, ci) => {
       const td = document.createElement('td'); td.textContent = formatNumber(typeof vals === 'number' ? vals : vals[c]);
       td.classList.add('highlight-col'); if (ci === ca.length - 1 && gi !== grps.length - 1) td.classList.add('group-divider');
@@ -394,7 +466,13 @@ function renderPaymentsTable(rows, masterAccs) {
     const o = ownMap.get(acc), t = othersMap.get(acc);
     if (o.a === 0 && o.t === 0 && o.p === 0 && t.a === 0 && t.t === 0 && t.p === 0) return;
 
-    const tr = document.createElement('tr'), tdAc = document.createElement('td'); tdAc.textContent = acc; tr.appendChild(tdAc);
+    const tr = document.createElement('tr');
+    
+    const tdAc = document.createElement('td'); 
+    tdAc.textContent = acc; 
+    tdAc.classList.add('account-link');
+    tdAc.onclick = () => openDetailsModal(acc);
+    tr.appendChild(tdAc);
     
     [o.a, o.t, o.p, t.a, t.t, t.p].forEach((v, i) => {
       const td = document.createElement('td'); td.textContent = formatNumber(v); if (i === 2) td.classList.add('group-divider'); tr.appendChild(td);
